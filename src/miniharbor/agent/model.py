@@ -16,7 +16,9 @@ added later behind the same seam.
 from __future__ import annotations
 
 import abc
+import asyncio
 import json
+import os
 import re
 import time
 
@@ -61,6 +63,123 @@ class OpenAIChatClient(ModelClient):
             tokens_out=usage.get("completion_tokens", 0),
             latency_ms=int((time.monotonic() - t0) * 1000),
         )
+
+
+class AnthropicClient(ModelClient):
+    """Anthropic Messages API. Not OpenAI-shaped: the system prompt is a top-level
+    field and `messages` carries only user/assistant turns, so we split it out."""
+
+    def __init__(self, model: str, *, api_key: str | None = None,
+                 base_url: str = "https://api.anthropic.com", max_tokens: int = 4096,
+                 version: str = "2023-06-01", timeout_s: float = 120):
+        self._model = model
+        self._key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
+        self._base = base_url.rstrip("/")
+        self._max_tokens = max_tokens
+        self._version = version
+        self._timeout = timeout_s
+
+    @staticmethod
+    def _split_system(messages: list[Message]) -> tuple[str, list[dict]]:
+        system = "\n\n".join(m.content for m in messages if m.role == "system")
+        conv = [{"role": m.role, "content": m.content} for m in messages if m.role != "system"]
+        return system, conv
+
+    @staticmethod
+    def _parse(data: dict) -> ModelResponse:
+        text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+        usage = data.get("usage", {})
+        return ModelResponse(text=text,
+                             tokens_in=usage.get("input_tokens", 0),
+                             tokens_out=usage.get("output_tokens", 0))
+
+    async def complete(self, messages: list[Message], **sampling) -> ModelResponse:
+        import httpx
+
+        system, conv = self._split_system(messages)
+        body = {"model": self._model,
+                "max_tokens": sampling.pop("max_tokens", self._max_tokens),
+                "messages": conv, **sampling}
+        if system:
+            body["system"] = system
+        t0 = time.monotonic()
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            resp = await client.post(
+                f"{self._base}/v1/messages", json=body,
+                headers={"x-api-key": self._key, "anthropic-version": self._version},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        out = self._parse(data)
+        out.latency_ms = int((time.monotonic() - t0) * 1000)
+        return out
+
+
+class SpindleClient(ModelClient):
+    """ModelClient backed by an async generative-job fabric: submit POST /jobs,
+    poll GET /jobs/{id} until terminal, read the text out of `output`.
+
+    Requires a text-generation job type to exist on the fabric; `job_type` and
+    `config_id` select it, `output_key` is where the worker puts the generated text.
+    base_url / auth are supplied at init -- nothing about the backend is hardcoded.
+    """
+
+    _TERMINAL = {"succeeded", "failed", "canceled", "dead_lettered"}
+
+    def __init__(self, base_url: str, job_type: str, config_id: str, *,
+                 auth_token: str | None = None, output_key: str = "text",
+                 poll_interval_s: float = 1.0, timeout_s: float = 300):
+        self._base = base_url.rstrip("/")
+        self._type = job_type
+        self._config_id = config_id
+        self._auth = auth_token
+        self._output_key = output_key
+        self._poll = poll_interval_s
+        self._timeout = timeout_s
+
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {self._auth}"} if self._auth else {}
+
+    @staticmethod
+    def _build_input(messages: list[Message], sampling: dict) -> dict:
+        return {"messages": [m.model_dump() for m in messages], **sampling}
+
+    def _extract(self, job: dict) -> ModelResponse:
+        out = job.get("output") or {}
+        usage = out.get("usage", {})
+        return ModelResponse(
+            text=out.get(self._output_key, ""),
+            tokens_in=usage.get("prompt_tokens", usage.get("input_tokens", 0)),
+            tokens_out=usage.get("completion_tokens", usage.get("output_tokens", 0)),
+        )
+
+    async def complete(self, messages: list[Message], **sampling) -> ModelResponse:
+        import httpx
+
+        body = {"type": self._type, "config_id": self._config_id,
+                "input": self._build_input(messages, sampling),
+                "timeout_seconds": int(self._timeout)}
+        t0 = time.monotonic()
+        deadline = t0 + self._timeout
+        async with httpx.AsyncClient(timeout=self._timeout, headers=self._headers()) as client:
+            r = await client.post(f"{self._base}/jobs", json=body)
+            r.raise_for_status()
+            job_id = r.json()["job_id"]
+            while True:
+                jr = await client.get(f"{self._base}/jobs/{job_id}")
+                jr.raise_for_status()
+                job = jr.json()
+                if job["status"] in self._TERMINAL:
+                    break
+                if time.monotonic() > deadline:
+                    raise TimeoutError(f"spindle job {job_id} did not finish in {self._timeout}s")
+                await asyncio.sleep(self._poll)
+        if job["status"] != "succeeded":
+            err = job.get("error") or {}
+            raise RuntimeError(f"spindle job {job['status']}: {err.get('code', '?')} {err.get('message', '')}")
+        out = self._extract(job)
+        out.latency_ms = int((time.monotonic() - t0) * 1000)
+        return out
 
 
 class FakeModelClient(ModelClient):

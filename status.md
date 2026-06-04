@@ -46,7 +46,11 @@ Living progress tracker. Update when a slice lands. For the design, read
 - **Slice 8** — DONE. Model-backed `Agent`: `OpenAIChatClient` (any OpenAI-compatible
   endpoint), `DefaultPromptTemplate` (renders context -> messages; text/JSON action
   format, not native tool-calling), `JSONActionParser` (with one corrective retry),
-  `ModelAgent`. Unit-tested with `FakeModelClient`. 32 tests pass.
+  `ModelAgent`. ModelClient adapters: `OpenAIChatClient`, `AnthropicClient`,
+  `SpindleClient` (async job fabric). The same `ModelAgent`/`Harness` runs any of
+  them by swapping the client -- which is what enables teacher-distillation (run a
+  strong model through our own harness to generate same-format SFT data for a weak
+  student). 36 tests pass.
 
 ## Next (in build order)
 
