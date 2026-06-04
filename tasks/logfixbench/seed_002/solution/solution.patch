@@ -1,0 +1,23 @@
+--- a/storage.py
++++ b/storage.py
+@@ -8,8 +8,7 @@ class EventStore:
+         self.conn = sqlite3.connect(path)
+         self.conn.execute(
+             "CREATE TABLE IF NOT EXISTS events ("
+-            "  rowid_   INTEGER PRIMARY KEY AUTOINCREMENT,"
+-            "  event_id TEXT,"
++            "  event_id TEXT PRIMARY KEY,"
+             "  payload  TEXT"
+             ")"
+         )
+@@ -17,9 +16,8 @@ class EventStore:
+         self.conn.commit()
+
+     def persist(self, event_id: str, payload: str) -> None:
+-        # NOTE: inserts a new row unconditionally.
+         self.conn.execute(
+-            "INSERT INTO events (event_id, payload) VALUES (?, ?)",
++            "INSERT OR IGNORE INTO events (event_id, payload) VALUES (?, ?)",
+             (event_id, payload),
+         )
+         self.conn.commit()

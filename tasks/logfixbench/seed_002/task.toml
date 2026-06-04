@@ -1,0 +1,24 @@
+name = "logfixbench-seed-002"
+family = "logfixbench"
+version = "1"
+instruction_file = "instruction.md"
+
+[budgets]
+timeout_seconds = 600
+max_steps = 40
+max_tokens = 200000
+verifier_timeout_seconds = 120
+
+[resources]
+cpu = 2
+memory_gb = 4
+disk_gb = 8
+
+[environment]
+build = "environment/Dockerfile"     # built with context = bundle root, -f environment/Dockerfile
+workdir = "/workspace"
+
+[verifier]
+entrypoint = "tests/run.sh"          # relative to bundle; copied into the sandbox at inject_path
+inject_path = "/opt/verifier"        # where tests/ is copied at grade time (NOT visible to the agent)
+reward_path = "/logs/verifier/reward.json"

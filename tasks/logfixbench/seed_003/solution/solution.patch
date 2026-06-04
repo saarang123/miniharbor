@@ -1,0 +1,16 @@
+--- a/worker.py
++++ b/worker.py
+@@ -7,9 +7,12 @@ def process(events_path: str, db_path: str) -> None:
+     """Read events from a JSONL file (one event per line) and persist each."""
+     store = EventStore(db_path)
+-    with open(events_path) as f:
+-        data = json.load(f)  # parse the input
+-    for event in data:
+-        store.persist(event["id"], json.dumps(event["payload"]))
++    with open(events_path) as f:
++        for line in f:
++            line = line.strip()
++            if not line:
++                continue
++            event = json.loads(line)
++            store.persist(event["id"], json.dumps(event["payload"]))

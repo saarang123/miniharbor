@@ -1,0 +1,12 @@
+--- a/worker.py
++++ b/worker.py
+@@ -19,7 +19,8 @@ def process(events_path: str, db_path: str) -> None:
+             if len(batch) == BATCH_SIZE:
+                 _flush(store, batch)
+                 batch = []
+-    # NOTE: events still buffered here after the loop are not handled.
++    if batch:
++        _flush(store, batch)
+
+
+ def _flush(store: EventStore, batch: list[dict]) -> None:
