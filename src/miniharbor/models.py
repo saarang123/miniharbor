@@ -8,6 +8,8 @@ from a `task_id`.
 
 from __future__ import annotations
 
+from enum import Enum
+
 from pydantic import BaseModel, Field
 
 
@@ -88,3 +90,68 @@ class Observation(BaseModel):
     result: dict
     truncated: bool = False
     bytes_omitted: int = 0
+
+
+class Message(BaseModel):
+    """One chat message (the unit a PromptTemplate renders context into)."""
+
+    role: str
+    content: str
+
+
+class Action(BaseModel):
+    """The agent's decision for one step: a tool call."""
+
+    tool: str
+    args: dict = Field(default_factory=dict)
+    raw: str | None = None                    # raw model text this was parsed from (audit)
+
+
+class Step(BaseModel):
+    """One (action, observation) pair plus the model I/O that produced it.
+    The model_* fields are empty for non-model agents (e.g. the scripted stub)."""
+
+    index: int
+    action: Action
+    observation: Observation
+    model_input: list[Message] = Field(default_factory=list)
+    model_output: str = ""
+    tokens_in: int = 0
+    tokens_out: int = 0
+    latency_ms: int = 0
+
+
+class AgentConfig(BaseModel):
+    """What pins a policy: model id + the rendering/parsing versions + sampling."""
+
+    model: str
+    prompt_template: str = "default"
+    parser: str = "default"
+    sampling: dict = Field(default_factory=dict)
+
+
+class TrajectoryContext(BaseModel):
+    """Everything the harness hands the agent each turn. The agent is a pure
+    function of this -- it holds no history of its own."""
+
+    instruction: str
+    tool_schemas: list[ToolSchema] = Field(default_factory=list)
+    history: list[Step] = Field(default_factory=list)
+    budgets_left: Budgets = Field(default_factory=Budgets)
+
+
+class HaltReason(str, Enum):
+    """Why the harness loop stopped. The full TrialStatus (passed/failed_tests) is
+    assigned later by the worker after the verifier runs."""
+
+    submitted = "submitted"          # agent called submit -> awaiting verification
+    timed_out = "timed_out"          # a budget tripped
+    agent_failed = "agent_failed"    # agent errored
+
+
+class RunResult(BaseModel):
+    """The harness loop's output (loop-level, pre-verification)."""
+
+    halt_reason: HaltReason
+    n_steps: int
+    steps: list[Step] = Field(default_factory=list)

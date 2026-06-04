@@ -38,12 +38,16 @@ Living progress tracker. Update when a slice lands. For the design, read
   (`exec` with default persistent terminal, `open_shell`, `read_file`, `write_file`,
   `submit`), model-error-vs-infra-error split (`SandboxError` propagates), observation
   truncation, pinned `version`. Unit + Docker integration pass (21 total).
+- **Slices 5-7** — DONE. `Agent` interface + `ScriptedAgent`; `Harness` (loop,
+  budgets, history-of-record, termination; versioned). The stub-driven loop closes
+  end-to-end on a real task: a scripted agent fixes seed_001 through
+  Harness -> ToolServer -> DockerEnvironment with no model. 25 tests pass.
 
 ## Next (in build order)
 
-- **Slice 5** — `Agent` base + a scripted stub agent.
-- **Slice 6/7** — `Harness` loop + deterministic test with the stub agent.
-- **Slice 8/9** — model-backed `Agent` + one real trial end-to-end.
+- **Slice 8** — model-backed `Agent` (ModelClient + PromptTemplate + Parser);
+  needs an OpenAI-compatible endpoint. Crib mini-swe-agent's minimal prompt shape.
+- **Slice 9** — one real trial end-to-end with a live model.
 - Then Phase 2 (Verifier/Logging/Orchestrator/Registry), Phase 3 (Firecracker),
   Phase 4 (SFT -> DPO -> GRPO).
 
