@@ -8,13 +8,26 @@ Skipped automatically when `docker` is not available. Run on a Docker host with:
 import json
 import os
 import shutil
+import subprocess
 
 import pytest
 
 from miniharbor.environment.docker import DockerEnvironment, build_image
 from miniharbor.models import Task
 
-pytestmark = pytest.mark.skipif(shutil.which("docker") is None, reason="docker not available")
+
+def _docker_available() -> bool:
+    """True only if the CLI exists AND the daemon is reachable -- a CLI with no
+    running daemon must SKIP, not fail."""
+    if shutil.which("docker") is None:
+        return False
+    try:
+        return subprocess.run(["docker", "info"], capture_output=True, timeout=5).returncode == 0
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(not _docker_available(), reason="docker daemon not reachable")
 
 BUNDLE = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "tasks", "logfixbench", "seed_001")
@@ -49,11 +62,16 @@ async def test_full_trial_flow():
         r = await env.exec("python -m pytest tests_public.py -q", cwd="/workspace")
         assert r.exit_code != 0
 
-        # 2. apply the reference solution (stand-in for the agent's fix)
-        patch = open(os.path.join(BUNDLE, "solution", "solution.patch"), "rb").read()
-        await env.write_file("/tmp/solution.patch", patch)
-        r = await env.exec("patch -p1 < /tmp/solution.patch", cwd="/workspace")
-        assert r.exit_code == 0
+        # 2. apply the fix (stand-in for the agent's edit) via write_file -- no
+        #    in-container tooling needed, and runtime egress is off so nothing could
+        #    be installed anyway.
+        buggy = open(os.path.join(BUNDLE, "workspace", "worker.py")).read()
+        fixed = buggy.replace(
+            "    # NOTE: events still buffered here after the loop are not handled.",
+            "    if batch:\n        _flush(store, batch)",
+        )
+        assert fixed != buggy                      # the marker line was found
+        await env.write_file("/workspace/worker.py", fixed.encode())
 
         # 3. public tests now pass
         r = await env.exec("python -m pytest tests_public.py -q", cwd="/workspace")

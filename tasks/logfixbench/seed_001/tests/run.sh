@@ -22,7 +22,7 @@ try:
     total = s.get("total", 0) or 1
     passed = s.get("passed", 0)
     reward = passed / total
-    ok = s.get("failed", 1) == 0 and s.get("error", 0) == 0
+    ok = total > 0 and s.get("failed", 0) == 0 and s.get("error", 0) == 0
 except Exception as exc:  # noqa: BLE001
     total, passed, reward, ok = 0, 0, 0.0, False
     detail = f"verifier error: {exc}"

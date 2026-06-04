@@ -26,15 +26,16 @@ Living progress tracker. Update when a slice lands. For the design, read
   `open_shell`/`exec(terminal_id=None|id)`/`close_shell`; one-shot vs persistent
   shell (sentinel done-detection); timeout always bounded; `read_file`/`write_file`
   via `docker cp`; `snapshot` via `docker commit`.
-- Tests: models, FakeEnvironment, and the sentinel `_drain_until` protocol pass
-  (10 passed). Docker integration test written (`tests/integration/`), skips when
-  docker is absent.
+- Tests: models, FakeEnvironment, and the sentinel `_drain_until` protocol pass.
+- **Slice 3** — DONE. Docker integration test (`tests/integration/`) passes on a
+  real daemon: build `seed_001` → bug reproduces → fix via `write_file` →
+  persistent-terminal session (cwd/env persist) → verifier injection → reward 1.0.
+  Full suite: 12 passed. (The integration test caught a verifier bug: `run.sh`
+  defaulted the `failed` count to 1, so a perfect run reported passed=False;
+  fixed across all seeds.) Local daemon here is colima.
 
 ## Next (in build order)
 
-- **Slice 3** — run the Docker integration test on a host *with Docker* (it was
-  written but only unit-verified here; the daemon was unavailable). Confirms the
-  full flow on `seed_001`.
 - **Slice 4** — `ToolServer` (per sandbox): exposes `open_shell` + `exec(terminal_id, cmd)`
   + `submit` over the `Environment`. (Agent-facing file/edit tool: deferred, see Open questions.)
 - **Slice 5** — `Agent` base + a scripted stub agent.
