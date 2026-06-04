@@ -5,6 +5,7 @@ description = "A small, correct agent-evaluation and RL-environment runner."
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2",
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]

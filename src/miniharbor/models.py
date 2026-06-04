@@ -155,3 +155,12 @@ class RunResult(BaseModel):
     halt_reason: HaltReason
     n_steps: int
     steps: list[Step] = Field(default_factory=list)
+
+
+class ModelResponse(BaseModel):
+    """What a ModelClient returns for one completion."""
+
+    text: str
+    tokens_in: int = 0
+    tokens_out: int = 0
+    latency_ms: int = 0

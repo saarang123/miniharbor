@@ -63,7 +63,11 @@ class Harness:
             # errors count as agent_failed.
             observation = await self._tools.call(action.tool, action.args)
 
-            step = Step(index=len(steps), action=action, observation=observation)
+            # model_output captured from the action's raw text (model agents set it;
+            # scripted agents leave it empty). Full model_input/token capture lands
+            # with the logger in Slice 11.
+            step = Step(index=len(steps), action=action, observation=observation,
+                        model_output=action.raw or "")
             steps.append(step)
             ctx.history.append(step)
             ctx.budgets_left.max_steps = self._budgets.max_steps - len(steps)

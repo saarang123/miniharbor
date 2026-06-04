@@ -43,13 +43,20 @@ Living progress tracker. Update when a slice lands. For the design, read
   end-to-end on a real task: a scripted agent fixes seed_001 through
   Harness -> ToolServer -> DockerEnvironment with no model. 25 tests pass.
 
+- **Slice 8** — DONE. Model-backed `Agent`: `OpenAIChatClient` (any OpenAI-compatible
+  endpoint), `DefaultPromptTemplate` (renders context -> messages; text/JSON action
+  format, not native tool-calling), `JSONActionParser` (with one corrective retry),
+  `ModelAgent`. Unit-tested with `FakeModelClient`. 32 tests pass.
+
 ## Next (in build order)
 
-- **Slice 8** — model-backed `Agent` (ModelClient + PromptTemplate + Parser);
-  needs an OpenAI-compatible endpoint. Crib mini-swe-agent's minimal prompt shape.
-- **Slice 9** — one real trial end-to-end with a live model.
+- **Slice 9** — one real trial with a live model. Code + test written
+  (`tests/integration/test_real_trial_docker.py`); needs an OpenAI-compatible
+  endpoint. To run: start a server, then
+  `MINIHARBOR_MODEL_BASE_URL=<url> MINIHARBOR_MODEL=<id> pytest tests/integration -q`.
+  Smoke test (loop runs + terminates); pass-rate is a post-training concern.
 - Then Phase 2 (Verifier/Logging/Orchestrator/Registry), Phase 3 (Firecracker),
-  Phase 4 (SFT -> DPO -> GRPO).
+  Phase 4 (SFT -> GRPO).
 
 ## Open questions / deferred
 
