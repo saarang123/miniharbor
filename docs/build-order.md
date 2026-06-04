@@ -168,9 +168,10 @@ These are swappable behind the `Environment` interface; none changes the loop.
 - **Doc:** [`pipeline/posttraining.md`](pipeline/posttraining.md).
 - **Accept:** held-out re-eval shows a pass@1 delta vs the baseline model.
 
-### Slice 16+ — DPO, then GRPO
-- **Deliver:** offline preference training (DPO), then online GRPO/RLVR with the
-  model server in the loop and the verifier as the reward.
+### Slice 16+ — GRPO (DPO optional)
+- **Deliver:** online GRPO/RLVR with the model server in the loop and the verifier
+  as the reward. The reward is verifiable (pass/fail), so SFT -> GRPO is the natural
+  ladder; DPO is an optional offline bridge (synthesizes preference pairs).
 - **Accept:** each rung re-evaluated on the held-out split; the loop runs
   end-to-end (rollouts → reward → training → measurable improvement).
 

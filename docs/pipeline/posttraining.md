@@ -2,7 +2,7 @@
 
 Closes the loop. Trajectories produced by eval runs become training data; a small open model is trained on them; the improved model is re-evaluated on held-out tasks. This is the one place MiniHarbor extends past a Harbor clone — Harbor emits the trajectory format and hands off; here the ATIF → train → re-eval loop is wired end to end.
 
-> Port: `TrainerBackend`. v1 adapter: LoRA SFT (offline). Swap-to: DPO → GRPO/RLVR (online, model server in the loop).
+> Port: `TrainerBackend`. v1 adapter: LoRA SFT (offline). Swap-to: GRPO/RLVR (online, model server in the loop). DPO optional (see "Reward signal").
 
 ## The shape
 
@@ -23,6 +23,16 @@ compare pass@1 vs the baseline model
 ```
 
 The offline methods (SFT, DPO) are pure transforms over stored trajectories — no re-running rollouts. GRPO puts the model server back in the loop.
+
+## Reward signal — verifiable rewards (RLVR)
+
+The only signal here is the verifier's **pass/fail (or partial) reward per rollout** — there are no human preference labels. This is the **RLVR** (RL with Verifiable Rewards) setting, and it determines the natural method ladder:
+
+- **SFT on passing rollouts** — uses the reward directly (filter to `reward.passed`). Simplest, offline, no instability. Do first.
+- **GRPO** — the natural fit: it consumes exactly "N rollouts per task, each scored by a verifier," with group-relative advantage and no value/reward model. This is what the eval loop already produces (N trials per task → rewards), so the rollout collection *is* the benchmark fan-out.
+- **DPO** — optional. It needs `(chosen ≻ rejected)` preference pairs, which must be *synthesized* from the binary outcomes (passed ≻ failed on the same task). Usable as an offline bridge, but a less natural fit than GRPO for a purely verifiable reward; the manufactured pairs are noisy.
+
+So the recommended path for this reward signal is **SFT → GRPO**, with DPO as an optional offline step.
 
 ## Interface
 
@@ -66,9 +76,11 @@ train_sft(examples, base_model)  →  LoRA adapter
 
 "Imitate the runs that worked." Sources can be the base model's own successful rollouts, a stronger model's rollouts, or oracle traces (the reference solution replayed through the harness). The harness already logged `model_input`/`model_output`, so this is a flatten, not a re-run.
 
-## Step 3 — DPO / preference, offline
+## Step 3 — DPO / preference, offline (optional)
 
-Build preference pairs from trajectories on the same task:
+Optional: with a purely verifiable reward, prefer SFT → GRPO (see "Reward signal").
+DPO is a usable offline bridge if pursued. Build preference pairs from trajectories
+on the same task:
 
 ```
 passed ≻ failed
