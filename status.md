@@ -32,7 +32,7 @@ Living progress tracker. Update when a slice lands. For the design, read
   persistent-terminal session (cwd/env persist) → verifier injection → reward 1.0.
   Full suite: 12 passed. (The integration test caught a verifier bug: `run.sh`
   defaulted the `failed` count to 1, so a perfect run reported passed=False;
-  fixed across all seeds.) Local daemon here is colima.
+  fixed across all seeds.)
 
 - **Slice 4** — DONE. `ToolServer` (per sandbox, env injected): 5 tools
   (`exec` with default persistent terminal, `open_shell`, `read_file`, `write_file`,
