@@ -19,3 +19,6 @@ packages = ["src/miniharbor"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Only collect our tests. Task bundles under tasks/ contain hidden tests that are
+# meant to run INSIDE the sandbox (they import the in-sandbox `worker`), not here.
+testpaths = ["tests"]
