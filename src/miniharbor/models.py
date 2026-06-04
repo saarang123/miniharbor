@@ -71,3 +71,20 @@ class Task(BaseModel):
     verifier: VerifierSpec = Field(default_factory=VerifierSpec)
     tests_ref: str | None = None              # host path / artifact ref to tests/
     solution_ref: str | None = None           # reference solution (validation only)
+
+
+class ToolSchema(BaseModel):
+    """A tool the agent may call, in tool-calling form (JSON Schema args)."""
+
+    name: str
+    description: str
+    parameters: dict                          # JSON Schema for the tool's arguments
+
+
+class Observation(BaseModel):
+    """The result of one tool call, fed back to the agent and logged in the trajectory."""
+
+    tool: str
+    result: dict
+    truncated: bool = False
+    bytes_omitted: int = 0

@@ -34,10 +34,13 @@ Living progress tracker. Update when a slice lands. For the design, read
   defaulted the `failed` count to 1, so a perfect run reported passed=False;
   fixed across all seeds.) Local daemon here is colima.
 
+- **Slice 4** — DONE. `ToolServer` (per sandbox, env injected): 5 tools
+  (`exec` with default persistent terminal, `open_shell`, `read_file`, `write_file`,
+  `submit`), model-error-vs-infra-error split (`SandboxError` propagates), observation
+  truncation, pinned `version`. Unit + Docker integration pass (21 total).
+
 ## Next (in build order)
 
-- **Slice 4** — `ToolServer` (per sandbox): exposes `open_shell` + `exec(terminal_id, cmd)`
-  + `submit` over the `Environment`. (Agent-facing file/edit tool: deferred, see Open questions.)
 - **Slice 5** — `Agent` base + a scripted stub agent.
 - **Slice 6/7** — `Harness` loop + deterministic test with the stub agent.
 - **Slice 8/9** — model-backed `Agent` + one real trial end-to-end.
@@ -46,8 +49,9 @@ Living progress tracker. Update when a slice lands. For the design, read
 
 ## Open questions / deferred
 
-- **Agent-facing edit tool** — most frameworks have one; deferred. Expect to add
-  when eval shows the small model mangling heredoc/`sed` edits.
+- **Structured edit tool** — `read_file`/`write_file` are exposed, but a structured
+  *edit* (str_replace-style) tool is deferred. Most frameworks have one; expect to
+  add when eval shows the small model mangling whole-file rewrites / `sed` edits.
 - **PTY / real TTY** — out of scope while the post-training target is non-interactive
   code tasks (SWE-bench/SWE-agent precedent). Becomes first-class only if the target
   capability becomes interactive terminal use (reshapes observation/action/trajectory).
