@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Env / secrets
+.env
+*.local
+
+# Runtime artifacts
+runs/
+jobs/
+trials/
+data/
+*.sqlite
+*.sqlite3
+*.db
+
+# Models / adapters
+checkpoints/
+adapters/
+*.gguf
+*.safetensors
+
+# Sandbox build artifacts
+rootfs/
+*.ext4
+vmlinux*
+
+# OS
+.DS_Store
