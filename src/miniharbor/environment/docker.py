@@ -23,7 +23,7 @@ import time
 import uuid
 
 from ..models import ExecResult, Task
-from .base import Environment, SandboxError
+from .base import Environment, SandboxError, TerminalError
 
 _PIPE = asyncio.subprocess.PIPE
 _STDOUT = asyncio.subprocess.STDOUT
@@ -180,7 +180,8 @@ class DockerEnvironment(Environment):
     async def _exec_in_terminal(self, terminal_id, cmd, *, timeout_s) -> ExecResult:
         shell = self._shells.get(terminal_id)
         if shell is None or shell.broken:
-            raise SandboxError(f"no live terminal {terminal_id!r}")
+            # recoverable: the agent can open a new terminal. Not whole-sandbox infra.
+            raise TerminalError(f"terminal {terminal_id!r} is not available; open a new one")
         # One terminal = one command at a time. The persistent shell merges
         # stdout+stderr (like a real terminal), so ExecResult.stdout is combined.
         async with shell.lock:

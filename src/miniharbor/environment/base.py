@@ -26,11 +26,19 @@ from ..models import ExecResult
 
 class SandboxError(RuntimeError):
     """An infra-level sandbox failure: the daemon/hypervisor failed, the sandbox
-    or a terminal could not start, or a control operation failed.
+    could not start, or a control operation failed -- the WHOLE sandbox is dead.
 
     Distinct from a command exiting nonzero (a normal ExecResult). The caller maps
     SandboxError to an `infra_failed` trial -- retryable, NOT counted against the
     model. A nonzero exit code is a model result and is NEVER an error.
+    """
+
+
+class TerminalError(RuntimeError):
+    """A single terminal is unusable (unknown id, or wedged past recovery). Unlike
+    SandboxError (whole sandbox dead = infra), this is the agent's concern and is
+    RECOVERABLE -- it can open a new terminal and continue. The ToolServer turns it
+    into an observation, never a crash.
     """
 
 

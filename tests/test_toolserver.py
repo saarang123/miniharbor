@@ -52,6 +52,19 @@ async def test_missing_arg_is_recoverable_error():
     assert "error" in obs.result
 
 
+async def test_unknown_terminal_id_is_recoverable_error():
+    ts = await _ts()
+    obs = await ts.call("exec", {"command": "ls", "terminal_id": "bogus"})
+    assert "error" in obs.result            # model-invented terminal -> recoverable, not a crash
+
+
+async def test_exec_with_opened_terminal_id_works():
+    ts = await _ts({"ls": ExecResult(stdout="files", stderr="", exit_code=0, duration_ms=1)})
+    tid = (await ts.call("open_shell", {})).result["terminal_id"]
+    obs = await ts.call("exec", {"command": "ls", "terminal_id": tid})
+    assert obs.result["stdout"] == "files"
+
+
 async def test_truncation():
     big = "x" * 50_000
     ts = await _ts({"big": ExecResult(stdout=big, stderr="", exit_code=0, duration_ms=1)},

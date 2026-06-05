@@ -52,13 +52,16 @@ Living progress tracker. Update when a slice lands. For the design, read
   strong model through our own harness to generate same-format SFT data for a weak
   student). 36 tests pass.
 
-## Next (in build order)
+- **Slice 9** — DONE. One real trial, end-to-end, with a live model: a strong model
+  fixed seed_001 through Build -> ModelAgent -> Harness -> ToolServer ->
+  DockerEnvironment -> Verifier, **reward 1.0 (8/8 hidden tests)**. Run it via
+  `scripts/run_trial.py --backend anthropic|openai --model <id>` (keys from env).
+  Found + fixed a real bug: a model-supplied bad terminal_id (and a dead terminal)
+  must be a RECOVERABLE observation, not a crash -- added `TerminalError` (recoverable)
+  vs `SandboxError` (whole-sandbox infra); the ToolServer turns tool errors (bad
+  tool/args/terminal, timeouts) into observations, only true infra propagates.
 
-- **Slice 9** — one real trial with a live model. Code + test written
-  (`tests/integration/test_real_trial_docker.py`); needs an OpenAI-compatible
-  endpoint. To run: start a server, then
-  `MINIHARBOR_MODEL_BASE_URL=<url> MINIHARBOR_MODEL=<id> pytest tests/integration -q`.
-  Smoke test (loop runs + terminates); pass-rate is a post-training concern.
+## Next (in build order)
 - Then Phase 2 (Verifier/Logging/Orchestrator/Registry), Phase 3 (Firecracker),
   Phase 4 (SFT -> GRPO).
 

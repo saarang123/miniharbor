@@ -17,7 +17,7 @@ Error policy (the load-bearing bit):
 
 from __future__ import annotations
 
-from ..environment.base import Environment, SandboxError
+from ..environment.base import Environment, SandboxError, TerminalError
 from ..models import Observation, ToolSchema
 
 TOOLSERVER_VERSION = "v1"
@@ -31,6 +31,7 @@ class ToolServer:
         self._env = env
         self._max = max_obs_bytes
         self._default_terminal: str | None = None      # lazily opened on first exec
+        self._terminals: set[str] = set()              # ids we've issued (default + open_shell)
         self._handlers = {
             "exec": self._exec,
             "open_shell": self._open_shell,
@@ -101,8 +102,10 @@ class ToolServer:
             return self._error(name, f"unknown tool {name!r}")
         try:
             return await handler(args or {})
+        except TerminalError as exc:
+            return self._error(name, str(exc))          # a dead terminal -> recoverable
         except SandboxError:
-            raise                                       # infra -> propagate (worker: infra_failed)
+            raise                                       # whole sandbox dead -> infra (worker: infra_failed)
         except (KeyError, TypeError, ValueError) as exc:
             return self._error(name, f"bad arguments: {exc}")   # model error -> recoverable
 
@@ -112,7 +115,19 @@ class ToolServer:
         cmd = args["command"]
         # Agent exec always runs in a PERSISTENT terminal (never the env's one-shot,
         # which is reserved for the verifier/infra). Default session opened lazily.
-        tid = args.get("terminal_id") or await self._ensure_default_terminal()
+        requested = args.get("terminal_id")
+        if requested:
+            # a model-invented terminal_id is a MODEL error (recoverable), not infra:
+            # validate against ids we've issued so it never reaches the env as a crash.
+            if str(requested) not in self._terminals:
+                return self._error(
+                    "exec",
+                    f"no terminal {requested!r}; omit terminal_id to use the default "
+                    f"session, or call open_shell first to open one",
+                )
+            tid = str(requested)
+        else:
+            tid = await self._ensure_default_terminal()
         res = await self._env.exec(cmd, terminal_id=tid)
         out, truncated, omitted = self._truncate(res.stdout)
         return Observation(
@@ -130,6 +145,7 @@ class ToolServer:
 
     async def _open_shell(self, args: dict) -> Observation:
         tid = await self._env.open_shell()
+        self._terminals.add(tid)
         return Observation(tool="open_shell", result={"terminal_id": tid})
 
     async def _read_file(self, args: dict) -> Observation:
@@ -157,6 +173,7 @@ class ToolServer:
     async def _ensure_default_terminal(self) -> str:
         if self._default_terminal is None:
             self._default_terminal = await self._env.open_shell()
+            self._terminals.add(self._default_terminal)
         return self._default_terminal
 
     def _truncate(self, text: str) -> tuple[str, bool, int]:
