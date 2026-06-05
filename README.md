@@ -41,7 +41,10 @@ miniharbor/
 │   ├── architecture.md         design philosophy, layering, control flow, swap matrix, isolation model
 │   ├── data-model.md           Task / Job / Trial / Trajectory (ATIF) / Reward schemas + status taxonomy
 │   ├── components/             one doc per module (the table above)
-│   └── pipeline/posttraining.md
+│   ├── pipeline/posttraining.md
+│   ├── build-order.md          dependency-ordered slices
+│   ├── design-notes.md         cross-cutting principles + lessons earned from live runs
+│   └── industry-comparison.md  how each decision compares to Harbor / SWE-agent / E2B / ...
 └── (impl lands later, under src/)
 ```
 
