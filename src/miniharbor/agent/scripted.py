@@ -7,7 +7,7 @@ submits, so the loop always terminates.
 
 from __future__ import annotations
 
-from ..models import Action, TrajectoryContext
+from ..models import Action, AgentResponse, TrajectoryContext
 from .base import Agent
 
 
@@ -19,9 +19,9 @@ class ScriptedAgent(Agent):
         self._actions = list(actions)
         self._i = 0
 
-    async def act(self, context: TrajectoryContext) -> Action:
+    async def act(self, context: TrajectoryContext) -> AgentResponse:
         if self._i >= len(self._actions):
-            return Action(tool="submit")        # exhausted -> submit (safety net)
+            return AgentResponse(action=Action(tool="submit"))   # exhausted -> submit
         action = self._actions[self._i]
         self._i += 1
-        return action
+        return AgentResponse(action=action)                      # no model I/O (no model)

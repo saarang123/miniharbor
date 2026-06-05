@@ -22,7 +22,7 @@ import os
 import re
 import time
 
-from ..models import Action, Message, ModelResponse, TrajectoryContext
+from ..models import Action, AgentResponse, Message, ModelResponse, TrajectoryContext
 from .base import Agent
 
 
@@ -40,6 +40,7 @@ class OpenAIChatClient(ModelClient):
     def __init__(self, base_url: str, model: str, *, api_key: str = "none", timeout_s: float = 120):
         self._base = base_url.rstrip("/")
         self._model = model
+        self.model_id = model
         self._key = api_key
         self._timeout = timeout_s
 
@@ -73,6 +74,7 @@ class AnthropicClient(ModelClient):
                  base_url: str = "https://api.anthropic.com", max_tokens: int = 4096,
                  version: str = "2023-06-01", timeout_s: float = 120):
         self._model = model
+        self.model_id = model
         self._key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         self._base = base_url.rstrip("/")
         self._max_tokens = max_tokens
@@ -132,6 +134,7 @@ class SpindleClient(ModelClient):
         self._base = base_url.rstrip("/")
         self._type = job_type
         self._config_id = config_id
+        self.model_id = f"spindle:{job_type}/{config_id}"
         self._auth = auth_token
         self._output_key = output_key
         self._poll = poll_interval_s
@@ -188,6 +191,7 @@ class FakeModelClient(ModelClient):
     def __init__(self, responses: list[str]):
         self._responses = list(responses)
         self._i = 0
+        self.model_id = "fake"
 
     async def complete(self, messages: list[Message], **sampling) -> ModelResponse:
         text = self._responses[self._i] if self._i < len(self._responses) else '{"tool":"submit","args":{}}'
@@ -212,6 +216,7 @@ class DefaultPromptTemplate:
             "```json fenced block, e.g.:\n"
             '```json\n{"tool": "exec", "args": {"command": "ls"}}\n```\n'
             "Omit terminal_id to use the default persistent terminal (state persists). "
+            "The task's files are under /workspace (use absolute paths or cd there). "
             "When the task is complete, call submit."
         )
         msgs = [Message(role="system", content=system),
@@ -267,8 +272,9 @@ class ModelAgent(Agent):
         self._parser = parser or JSONActionParser()
         self.version = version
         self._sampling = sampling or {}
+        self.model_id = getattr(client, "model_id", "model")
 
-    async def act(self, context: TrajectoryContext) -> Action:
+    async def act(self, context: TrajectoryContext) -> AgentResponse:
         messages = self._prompt.render(context)
         resp = await self._client.complete(messages, **self._sampling)
         action = self._parser.parse(resp.text)
@@ -284,4 +290,11 @@ class ModelAgent(Agent):
         if action is None:
             raise ValueError("agent produced no parseable tool call after one retry")
         action.raw = resp.text
-        return action
+        return AgentResponse(
+            action=action,
+            message=resp.text,                 # assistant content/reasoning
+            model_input=messages,              # exact messages sent (for training)
+            tokens_in=resp.tokens_in,
+            tokens_out=resp.tokens_out,
+            latency_ms=resp.latency_ms,
+        )

@@ -102,8 +102,8 @@ class ToolServer:
             return self._error(name, f"unknown tool {name!r}")
         try:
             return await handler(args or {})
-        except TerminalError as exc:
-            return self._error(name, str(exc))          # a dead terminal -> recoverable
+        except (TerminalError, FileNotFoundError) as exc:
+            return self._error(name, str(exc))          # dead terminal / bad path -> recoverable
         except SandboxError:
             raise                                       # whole sandbox dead -> infra (worker: infra_failed)
         except (KeyError, TypeError, ValueError) as exc:

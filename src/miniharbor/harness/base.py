@@ -23,11 +23,10 @@ HARNESS_VERSION = "v1"
 class Harness:
     version = HARNESS_VERSION
 
-    def __init__(self, agent: Agent, tool_server: ToolServer, budgets: Budgets, *, logger=None):
+    def __init__(self, agent: Agent, tool_server: ToolServer, budgets: Budgets):
         self._agent = agent
         self._tools = tool_server
         self._budgets = budgets
-        self._logger = logger          # TrajectoryLogger (Slice 11); optional for now
 
     async def run(self, instruction: str) -> RunResult:
         ctx = TrajectoryContext(
@@ -48,34 +47,34 @@ class Harness:
 
             # --- ask the policy for the next action ---
             try:
-                action = await self._agent.act(ctx)
+                response = await self._agent.act(ctx)
             except Exception:
-                # agent-level failure (a valid model result). NOTE: a model-server
-                # infra error will be distinguished from this at Slice 8.
+                # agent-level failure (a valid model result). A model-server infra
+                # error is currently lumped here; distinguish later if needed.
                 return self._finish(HaltReason.agent_failed, steps)
 
+            action = response.action
             if action.tool == "submit":
                 return self._finish(HaltReason.submitted, steps)
 
             # --- execute via the ToolServer ---
             # SandboxError (infra) is intentionally NOT caught here: it propagates to
-            # the worker, which marks the trial infra_failed. Only the agent's own
-            # errors count as agent_failed.
+            # the trial runner, which marks the trial infra_failed. Only the agent's
+            # own errors count as agent_failed.
             observation = await self._tools.call(action.tool, action.args)
 
-            # model_output captured from the action's raw text (model agents set it;
-            # scripted agents leave it empty). Full model_input/token capture lands
-            # with the logger in Slice 11.
-            step = Step(index=len(steps), action=action, observation=observation,
-                        model_output=action.raw or "")
+            # complete step: action + observation + the model I/O from AgentResponse.
+            step = Step(
+                index=len(steps), action=action, observation=observation,
+                model_input=response.model_input, model_output=response.message,
+                tokens_in=response.tokens_in, tokens_out=response.tokens_out,
+                latency_ms=response.latency_ms,
+            )
             steps.append(step)
             ctx.history.append(step)
             ctx.budgets_left.max_steps = self._budgets.max_steps - len(steps)
-            if self._logger is not None:
-                self._logger.on_step(step)
 
     def _finish(self, reason: HaltReason, steps: list[Step]) -> RunResult:
-        result = RunResult(halt_reason=reason, n_steps=len(steps), steps=steps)
-        if self._logger is not None:
-            self._logger.on_trial_end(result)
-        return result
+        # Logging is the trial runner's job (it owns the full Trajectory); the harness
+        # just returns the loop result.
+        return RunResult(halt_reason=reason, n_steps=len(steps), steps=steps)

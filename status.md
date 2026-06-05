@@ -62,8 +62,17 @@ Living progress tracker. Update when a slice lands. For the design, read
   tool/args/terminal, timeouts) into observations, only true infra propagates.
 
 ## Next (in build order)
-- Then Phase 2 (Verifier/Logging/Orchestrator/Registry), Phase 3 (Firecracker),
-  Phase 4 (SFT -> GRPO).
+- **Phase 2 (mostly done)** — `Verifier` (FileContractVerifier), `Trajectory`+`logger`
+  (TrajectoryLogger, versioned; harness assembles trajectory with full model I/O),
+  `run_trial` (PURE -> returns Trajectory, no logging), `Run`/`run_job` (run-level:
+  owns the logger, fans out tasks x attempts, aggregates pass@1 + status counts,
+  writes a manifest). `act()` now returns `AgentResponse` (action + message +
+  model_input + tokens) so steps log model I/O. Remaining: `Registry`.
+- More recoverable-error hardening from live runs: bad `terminal_id` and bad file
+  paths are now recoverable observations (TerminalError / FileNotFoundError), not
+  infra crashes; only container-death is `infra_failed`.
+- Next: **Registry** (+ a Terminal-Bench adapter to import many tasks), **Phase 3**
+  (Firecracker microVM), **Phase 4** (SFT -> GRPO).
 
 ## Open questions / deferred
 

@@ -167,7 +167,7 @@ class DockerEnvironment(Environment):
                 duration_ms=int((time.monotonic() - start) * 1000),
             )
         dur = int((time.monotonic() - start) * 1000)
-        if self._looks_like_daemon_error(err):
+        if self._is_container_gone(err):
             raise SandboxError(f"docker exec failed: {err.decode(errors='replace')}")
         return ExecResult(
             stdout=out.decode(errors="replace"),
@@ -262,7 +262,10 @@ class DockerEnvironment(Environment):
         try:
             rc, _out, err = await _run("docker", "cp", f"{cid}:{path}", tmp)
             if rc != 0:
-                raise SandboxError(f"read_file({path}) failed: {err.decode(errors='replace')}")
+                if self._is_container_gone(err):
+                    raise SandboxError(f"read_file({path}) failed: {err.decode(errors='replace')}")
+                # a missing/bad path is the agent's mistake -> recoverable observation
+                raise FileNotFoundError(f"read_file({path}): {err.decode(errors='replace').strip()}")
             with open(tmp, "rb") as fh:
                 return fh.read(max_bytes)
         finally:
@@ -280,7 +283,9 @@ class DockerEnvironment(Environment):
                 fh.write(content)
             rc, _out, err = await _run("docker", "cp", tmp, f"{cid}:{path}")
             if rc != 0:
-                raise SandboxError(f"write_file({path}) failed: {err.decode(errors='replace')}")
+                if self._is_container_gone(err):
+                    raise SandboxError(f"write_file({path}) failed: {err.decode(errors='replace')}")
+                raise FileNotFoundError(f"write_file({path}): {err.decode(errors='replace').strip()}")
         finally:
             os.unlink(tmp)
 
@@ -302,10 +307,8 @@ class DockerEnvironment(Environment):
         return self._cid
 
     @staticmethod
-    def _looks_like_daemon_error(err: bytes) -> bool:
+    def _is_container_gone(err: bytes) -> bool:
+        # ONLY whole-sandbox death. NOT the generic "Error response from daemon",
+        # which also appears in benign cases like file-not-found from `docker cp`.
         s = err.decode(errors="replace")
-        return (
-            "Error response from daemon" in s
-            or "No such container" in s
-            or "is not running" in s
-        )
+        return "No such container" in s or "is not running" in s

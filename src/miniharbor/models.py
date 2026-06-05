@@ -121,6 +121,22 @@ class Step(BaseModel):
     latency_ms: int = 0
 
 
+class AgentResponse(BaseModel):
+    """What an Agent returns for one turn: the chosen action + the assistant's
+    reasoning + the model I/O the harness needs to log a complete step.
+
+    v1 is one action per turn (our JSON parser emits one). The native-tool-calling
+    extension would add `tool_calls: list[Action]`; the harness would execute each.
+    """
+
+    action: Action
+    message: str = ""                          # assistant reasoning/content
+    model_input: list[Message] = Field(default_factory=list)
+    tokens_in: int = 0
+    tokens_out: int = 0
+    latency_ms: int = 0
+
+
 class AgentConfig(BaseModel):
     """What pins a policy: model id + the rendering/parsing versions + sampling."""
 
@@ -164,3 +180,71 @@ class ModelResponse(BaseModel):
     tokens_in: int = 0
     tokens_out: int = 0
     latency_ms: int = 0
+
+
+class Reward(BaseModel):
+    """The verifier's output for one trial."""
+
+    reward: float                              # 0.0..1.0
+    passed: bool
+    breakdown: dict = Field(default_factory=dict)
+    detail: str | None = None
+
+
+class TrialStatus(str, Enum):
+    """Terminal verdict for a trial. Keeps model results separate from infra and
+    task-health failures."""
+
+    passed = "passed"                  # verifier reward = pass        }
+    failed_tests = "failed_tests"      # verifier reward = fail        } valid model results
+    agent_failed = "agent_failed"      # agent errored / gave up       }
+    timed_out = "timed_out"            # a budget tripped              }
+    infra_failed = "infra_failed"      # sandbox died -> retryable, excluded from the metric
+    verifier_failed = "verifier_failed"  # verifier errored -> task version unhealthy
+
+
+class Trajectory(BaseModel):
+    """The full, persisted record of a trial: provenance + every step + the reward.
+    Designed to flatten into SFT/DPO/GRPO training examples."""
+
+    trial_id: str
+    task_id: str
+    model: str = ""
+    agent: str = ""
+    agent_version: str = ""
+    harness_version: str = ""
+    toolserver_version: str = ""
+    logger_version: str = ""
+    instruction: str = ""
+    steps: list[Step] = Field(default_factory=list)
+    halt_reason: HaltReason | None = None
+    status: TrialStatus | None = None
+    reward: Reward | None = None
+    n_steps: int = 0
+    duration_ms: int = 0
+    error: str | None = None
+
+
+class TrialResult(BaseModel):
+    """What the trial runner returns: the verdict + pointers, not the full trajectory."""
+
+    trial_id: str
+    task_id: str
+    status: TrialStatus
+    reward: Reward | None = None
+    halt_reason: HaltReason | None = None
+    n_steps: int = 0
+    duration_ms: int = 0
+    trajectory_ref: str | None = None          # where the trajectory was written
+    error: str | None = None
+
+
+class RunReport(BaseModel):
+    """Aggregate result of a Run (one experiment: tasks x attempts for one agent)."""
+
+    run_id: str
+    run_dir: str
+    n_trials: int
+    status_counts: dict[str, int] = Field(default_factory=dict)
+    pass_at_1: float = 0.0                       # passed / (trials excluding infra failures)
+    trials: list[TrialResult] = Field(default_factory=list)

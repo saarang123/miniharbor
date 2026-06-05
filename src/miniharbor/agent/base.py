@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import abc
 
-from ..models import Action, TrajectoryContext
+from ..models import AgentResponse, TrajectoryContext
 
 
 class Agent(abc.ABC):
@@ -20,5 +20,7 @@ class Agent(abc.ABC):
     version: str = "v0"
 
     @abc.abstractmethod
-    async def act(self, context: TrajectoryContext) -> Action:
-        """Given the trajectory so far, return the next action (a tool call)."""
+    async def act(self, context: TrajectoryContext) -> AgentResponse:
+        """Given the trajectory so far, return the next action + the model I/O the
+        harness logs (message, model_input, tokens). The agent holds no history; it
+        is a pure function of the context."""

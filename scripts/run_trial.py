@@ -1,4 +1,4 @@
-"""Run one real trial and print the trajectory + reward.
+"""Run one real trial via run_trial() and print the trajectory + reward.
 
 Usage:
     python scripts/run_trial.py --backend anthropic --model claude-sonnet-4-6
@@ -6,6 +6,7 @@ Usage:
 
 API keys are read from the environment (ANTHROPIC_API_KEY / OPENAI_API_KEY); this
 script never prints them. Makes real API calls and runs a real Docker container.
+The full trajectory is written under <run-dir>/<trial_id>/trajectory.json.
 """
 
 from __future__ import annotations
@@ -17,9 +18,8 @@ import os
 
 from miniharbor.agent import AnthropicClient, ModelAgent, OpenAIChatClient
 from miniharbor.environment.docker import DockerEnvironment, build_image
-from miniharbor.harness import Harness
 from miniharbor.models import Budgets, Message, Task
-from miniharbor.toolserver import ToolServer
+from miniharbor.run import run_job
 
 
 def build_client(backend: str, model: str):
@@ -31,20 +31,13 @@ def build_client(backend: str, model: str):
     raise SystemExit(f"unknown backend: {backend}")
 
 
-async def verify(env: DockerEnvironment, bundle: str) -> dict:
-    for fname in ("run.sh", "test_hidden.py"):
-        content = open(os.path.join(bundle, "tests", fname), "rb").read()
-        await env.write_file(f"/opt/verifier/{fname}", content)
-    await env.exec("bash /opt/verifier/run.sh", timeout_s=120)
-    return json.loads(await env.read_file("/logs/verifier/reward.json"))
-
-
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--task", default="tasks/logfixbench/seed_001")
     ap.add_argument("--backend", default="anthropic", choices=["anthropic", "openai"])
     ap.add_argument("--model", default="claude-sonnet-4-6")
     ap.add_argument("--max-steps", type=int, default=15)
+    ap.add_argument("--run-dir", default="runs")
     args = ap.parse_args()
 
     bundle = os.path.abspath(args.task)
@@ -57,25 +50,30 @@ async def main() -> None:
 
     print(f"building image for {args.task} ...")
     img = await build_image(bundle)
-    task = Task(task_id=os.path.basename(bundle), image_ref=img, instruction=instruction)
+    task = Task(task_id=os.path.basename(bundle), image_ref=img, instruction=instruction,
+                tests_ref=os.path.join(bundle, "tests"))
 
     print(f"running trial (max_steps={args.max_steps}) ...\n")
-    async with DockerEnvironment(task) as env:
-        tools = ToolServer(env)
-        harness = Harness(ModelAgent(client), tools, Budgets(max_steps=args.max_steps))
-        result = await harness.run(task.instruction)
+    report = await run_job(
+        [task], ModelAgent(client),
+        run_dir=args.run_dir, env_factory=DockerEnvironment,
+        attempts=1, concurrency=1, budgets=Budgets(max_steps=args.max_steps),
+    )
+    tr = report.trials[0]
 
-        for s in result.steps:
-            args_str = json.dumps(s.action.args)[:200]
-            obs = json.dumps(s.observation.result)[:300]
-            print(f"[step {s.index}] {s.action.tool} {args_str}\n   -> {obs}\n")
+    if tr.trajectory_ref:
+        traj = json.load(open(tr.trajectory_ref))
+        for s in traj["steps"]:
+            args_str = json.dumps(s["action"]["args"])[:200]
+            obs = json.dumps(s["observation"]["result"])[:300]
+            print(f"[step {s['index']}] {s['action']['tool']} {args_str}\n   -> {obs}\n")
 
-        print(f"halt: {result.halt_reason.value}   steps: {result.n_steps}")
-        try:
-            reward = await verify(env, bundle)
-            print(f"reward: {reward}")
-        except Exception as exc:  # noqa: BLE001
-            print(f"verifier error: {exc}")
+    print(f"status: {tr.status.value}   steps: {tr.n_steps}   "
+          f"reward: {tr.reward.model_dump() if tr.reward else None}")
+    print(f"log: {tr.trajectory_ref}")
+    print(f"run manifest: {os.path.join(args.run_dir, 'manifest.json')}   pass@1: {report.pass_at_1}")
+    if tr.error:
+        print(f"error: {tr.error}")
 
 
 if __name__ == "__main__":

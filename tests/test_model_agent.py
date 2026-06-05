@@ -43,15 +43,15 @@ def test_prompt_renders_system_then_instruction():
 
 async def test_act_returns_parsed_action():
     client = FakeModelClient(['```json\n{"tool":"exec","args":{"command":"echo hi"}}\n```'])
-    a = await ModelAgent(client).act(TrajectoryContext(instruction="do it"))
-    assert a.tool == "exec" and a.args["command"] == "echo hi"
-    assert a.raw is not None
+    r = await ModelAgent(client).act(TrajectoryContext(instruction="do it"))
+    assert r.action.tool == "exec" and r.action.args["command"] == "echo hi"
+    assert r.message and r.model_input            # model I/O captured for the trajectory
 
 
 async def test_act_recovers_on_corrective_retry():
     client = FakeModelClient(["garbage", '```json\n{"tool":"submit","args":{}}\n```'])
-    a = await ModelAgent(client).act(TrajectoryContext(instruction="do it"))
-    assert a.tool == "submit"
+    r = await ModelAgent(client).act(TrajectoryContext(instruction="do it"))
+    assert r.action.tool == "submit"
 
 
 async def test_act_raises_after_failed_retry():
